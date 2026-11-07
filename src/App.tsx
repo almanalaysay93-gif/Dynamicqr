@@ -1,0 +1,550 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Search,
+  LayoutGrid,
+  List,
+  Plus,
+  ArrowUpDown,
+  Sparkles,
+  QrCode,
+  CheckCircle2,
+  Tag,
+} from 'lucide-react';
+import {
+  DynamicQR,
+  ScanRecord,
+  PlatformSettings,
+  CenterLogoConfig,
+  getInitialDemoQrs,
+  getInitialDemoScans,
+  filterQrs,
+  exportQrsToCsv,
+  createScanEvent,
+} from './utils/qrLogic';
+import { TopNav } from './components/TopNav';
+import { CampaignBar } from './components/CampaignBar';
+import { QrCard } from './components/QrCard';
+import { QrTableView } from './components/QrTableView';
+import { CreateQrModal } from './components/CreateQrModal';
+import { EditDestinationModal } from './components/EditDestinationModal';
+import { QrAnalyticsModal } from './components/QrAnalyticsModal';
+import { DeploymentModal } from './components/DeploymentModal';
+import { SettingsModal } from './components/SettingsModal';
+import { RedirectScreen } from './components/RedirectScreen';
+import { GoogleBusinessModal } from './components/GoogleBusinessModal';
+
+const STORAGE_KEY_QRS = 'dynoqr_hosted_qrs_v1';
+const STORAGE_KEY_SCANS = 'dynoqr_scan_logs_v1';
+const STORAGE_KEY_SETTINGS = 'dynoqr_settings_v1';
+
+export default function App() {
+  const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      const match = path.match(/^\/r\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        setRedirectSlug(match[1]);
+        return;
+      }
+      const searchParams = new URLSearchParams(window.location.search);
+      const querySlug = searchParams.get('r');
+      if (querySlug) {
+        setRedirectSlug(querySlug);
+      }
+    }
+  }, []);
+
+  // Main Persistent State
+  const [qrs, setQrs] = useState<DynamicQR[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_QRS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not load QRs from localStorage', e);
+    }
+    return getInitialDemoQrs();
+  });
+
+  const [scans, setScans] = useState<ScanRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SCANS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not load Scans from localStorage', e);
+    }
+    return getInitialDemoScans();
+  });
+
+  const [settings, setSettings] = useState<PlatformSettings>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Could not load Settings from localStorage', e);
+    }
+    return {
+      customDomain: 'go.link',
+      useCustomDomain: false,
+      defaultFolder: 'Default',
+      autoLogSimulations: true,
+      redirectDelayMs: 600,
+    };
+  });
+
+  // Save to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_QRS, JSON.stringify(qrs));
+    } catch (e) {}
+  }, [qrs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SCANS, JSON.stringify(scans));
+    } catch (e) {}
+  }, [scans]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    } catch (e) {}
+  }, [settings]);
+
+  // View state & filters
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [sortBy, setSortBy] = useState<'recent' | 'scans' | 'name'>('recent');
+
+  // Modals state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isGoogleBusinessOpen, setIsGoogleBusinessOpen] = useState(false);
+  const [isDeploymentOpen, setIsDeploymentOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [editingQr, setEditingQr] = useState<DynamicQR | null>(null);
+  const [analyticsQr, setAnalyticsQr] = useState<DynamicQR | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Derived folder list
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    qrs.forEach((q) => {
+      if (q.folder) set.add(q.folder);
+    });
+    return Array.from(set).sort();
+  }, [qrs]);
+
+  // Filtered and sorted QRs
+  const filteredQrs = useMemo(() => {
+    let result = filterQrs(qrs, {
+      folder: selectedFolder,
+      status: statusFilter,
+      search: searchQuery,
+    });
+
+    if (sortBy === 'scans') {
+      result.sort((a, b) => (b.totalScans || 0) - (a.totalScans || 0));
+    } else if (sortBy === 'name') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      result.sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt).getTime() -
+          new Date(a.updatedAt || a.createdAt).getTime()
+      );
+    }
+
+    return result;
+  }, [qrs, selectedFolder, statusFilter, searchQuery, sortBy]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleCreateQr = (newQr: DynamicQR) => {
+    setQrs((prev) => [newQr, ...prev]);
+    showToast(`Created Dynamic QR "/r/${newQr.slug}"!`);
+  };
+
+  const handleToggleActive = (qrId: string) => {
+    setQrs((prev) =>
+      prev.map((q) => {
+        if (q.id === qrId) {
+          const next = !q.isActive;
+          showToast(next ? `Activated "${q.name}"` : `Paused "${q.name}"`);
+          return { ...q, isActive: next, updatedAt: new Date().toISOString() };
+        }
+        return q;
+      })
+    );
+  };
+
+  const handleSaveDestination = (
+    qrId: string,
+    newDestination: string,
+    newName?: string,
+    newLogo?: CenterLogoConfig
+  ) => {
+    setQrs((prev) =>
+      prev.map((q) => {
+        if (q.id === qrId) {
+          return {
+            ...q,
+            destination: newDestination,
+            name: newName || q.name,
+            updatedAt: new Date().toISOString(),
+            styling: {
+              ...(q.styling || {
+                fgColor: '#0F172A',
+                bgColor: '#FFFFFF',
+                correctionLevel: 'H',
+              }),
+              centerLogo: newLogo !== undefined ? newLogo : q.styling?.centerLogo,
+            },
+          };
+        }
+        return q;
+      })
+    );
+    showToast('Destination updated! Physical QR code remains 100% identical.');
+  };
+
+  const handleDuplicateQr = (qr: DynamicQR) => {
+    const newSlug = `${qr.slug}-copy`;
+    const copy: DynamicQR = {
+      ...qr,
+      id: `qr-${Date.now()}`,
+      name: `${qr.name} (Copy)`,
+      slug: newSlug,
+      totalScans: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setQrs((prev) => [copy, ...prev]);
+    showToast(`Duplicated into "/r/${newSlug}"`);
+  };
+
+  const handleDeleteQr = (qrId: string) => {
+    const target = qrs.find((q) => q.id === qrId);
+    if (confirm(`Delete dynamic QR "${target?.name || ''}"?`)) {
+      setQrs((prev) => prev.filter((q) => q.id !== qrId));
+      showToast('Dynamic QR deleted.');
+    }
+  };
+
+  const handleSimulateScan = (qr: DynamicQR) => {
+    const scanEvent = createScanEvent(qr);
+    setScans((prev) => [scanEvent, ...prev]);
+    setQrs((prev) =>
+      prev.map((q) => {
+        if (q.id === qr.id) {
+          return { ...q, totalScans: (q.totalScans || 0) + 1 };
+        }
+        return q;
+      })
+    );
+    showToast(`Simulated scan on "${qr.name}" from ${scanEvent.city}!`);
+  };
+
+  const handleLogScanFromRedirect = (scan: ScanRecord, qrId: string) => {
+    setScans((prev) => [scan, ...prev]);
+    setQrs((prev) =>
+      prev.map((q) => (q.id === qrId ? { ...q, totalScans: (q.totalScans || 0) + 1 } : q))
+    );
+  };
+
+  const handleExportCsv = () => {
+    const csvContent = exportQrsToCsv(qrs, settings);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `dynoqr-all-qrs-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    showToast('CSV export downloaded!');
+  };
+
+  const handleCreateFolder = (newFolderName: string) => {
+    if (!folders.includes(newFolderName)) {
+      setSelectedFolder(newFolderName);
+      showToast(`Campaign folder "${newFolderName}" created!`);
+    }
+  };
+
+  const handleResetToDemo = () => {
+    setQrs(getInitialDemoQrs());
+    setScans(getInitialDemoScans());
+    showToast('Reset to demo dynamic QRs!');
+  };
+
+  // If hitting a redirect directly in browser (e.g. /r/reviews-kansas)
+  if (redirectSlug) {
+    return (
+      <RedirectScreen
+        slug={redirectSlug}
+        qrs={qrs}
+        onLogScan={handleLogScanFromRedirect}
+        onBackToDashboard={() => {
+          setRedirectSlug(null);
+          if (window.history.pushState) {
+            window.history.pushState('', '/', window.location.pathname);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      {/* Top Navigation */}
+      <TopNav
+        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenGoogleBusiness={() => setIsGoogleBusinessOpen(true)}
+        onOpenDeployment={() => setIsDeploymentOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onExportCsv={handleExportCsv}
+        totalQrs={qrs.length}
+      />
+
+      {/* Main Spacious Scroll View */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        {/* Horizontal Campaign Scroller */}
+        <CampaignBar
+          qrs={qrs}
+          selectedFolder={selectedFolder}
+          onSelectFolder={(f) => setSelectedFolder(f)}
+          folders={folders}
+          onCreateFolder={handleCreateFolder}
+        />
+
+        {/* Filter & Search Ribbon */}
+        <div className="clay-card-flat p-3 sm:p-4 mb-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-xs bg-white border border-slate-200">
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search dynamic QRs by name, slug, folder, or target URL..."
+              className="w-full clay-inset pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none bg-slate-50 border border-slate-200 rounded-xl"
+            />
+          </div>
+
+          {/* Status & View Controls */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Status Pills */}
+            <div className="flex items-center clay-inset p-1 text-xs bg-slate-100 border border-slate-200 rounded-full">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  statusFilter === 'all'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({qrs.length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('active')}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  statusFilter === 'active'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setStatusFilter('inactive')}
+                className={`px-3 py-1 rounded-full font-bold transition-all cursor-pointer ${
+                  statusFilter === 'inactive'
+                    ? 'bg-slate-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Paused
+              </button>
+            </div>
+
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="clay-inset text-slate-700 bg-white border border-slate-200 px-3 py-1.5 text-xs focus:outline-none cursor-pointer rounded-xl font-medium"
+            >
+              <option value="recent">Recently Updated</option>
+              <option value="scans">Most Scanned</option>
+              <option value="name">Alphabetical</option>
+            </select>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center clay-inset p-1 bg-slate-100 border border-slate-200 rounded-full">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Grid Card View"
+                aria-label="Grid Card View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Table View"
+                aria-label="Table View"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic QR Cards Grid / Table */}
+        {filteredQrs.length > 0 ? (
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredQrs.map((qr) => (
+                <QrCard
+                  key={qr.id}
+                  qr={qr}
+                  settings={settings}
+                  onEditDestination={(q) => setEditingQr(q)}
+                  onOpenAnalytics={(q) => setAnalyticsQr(q)}
+                  onToggleActive={handleToggleActive}
+                  onDuplicate={handleDuplicateQr}
+                  onDelete={handleDeleteQr}
+                  onSimulateScan={handleSimulateScan}
+                />
+              ))}
+            </div>
+          ) : (
+            <QrTableView
+              qrs={filteredQrs}
+              settings={settings}
+              onEditDestination={(q) => setEditingQr(q)}
+              onOpenAnalytics={(q) => setAnalyticsQr(q)}
+              onToggleActive={handleToggleActive}
+              onDelete={handleDeleteQr}
+              onSimulateScan={handleSimulateScan}
+            />
+          )
+        ) : (
+          /* Empty State */
+          <div className="clay-card p-12 text-center space-y-4 bg-white border border-slate-200">
+            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-100 shadow-xs">
+              <QrCode className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">No Matching Dynamic QRs</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                No dynamic codes matched your search or folder filter.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedFolder('all');
+                  setStatusFilter('all');
+                  setIsCreateOpen(true);
+                }}
+                className="clay-button-primary px-5 py-2.5 text-xs font-bold text-white inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Dynamic QR</span>
+              </button>
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedFolder('all');
+                  setStatusFilter('all');
+                  setIsGoogleBusinessOpen(true);
+                }}
+                className="clay-button-secondary px-4 py-2.5 text-xs font-bold text-blue-600 inline-flex items-center gap-1.5 cursor-pointer border border-blue-200 bg-blue-50/50 hover:bg-blue-100"
+              >
+                <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-black">G</span>
+                <span>Generate Google Review QR</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 clay-card border border-blue-200 text-slate-900 text-xs px-5 py-3 shadow-xl flex items-center gap-2.5 animate-bounce bg-white">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="font-semibold">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Modals */}
+      <CreateQrModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreated={handleCreateQr}
+        existingQrs={qrs}
+        folders={folders}
+        settings={settings}
+      />
+
+      <GoogleBusinessModal
+        isOpen={isGoogleBusinessOpen}
+        onClose={() => setIsGoogleBusinessOpen(false)}
+        onGenerateQr={handleCreateQr}
+        existingQrs={qrs}
+        folders={folders}
+      />
+
+      <EditDestinationModal
+        qr={editingQr}
+        isOpen={Boolean(editingQr)}
+        onClose={() => setEditingQr(null)}
+        onSave={handleSaveDestination}
+      />
+
+      <QrAnalyticsModal
+        qr={analyticsQr}
+        isOpen={Boolean(analyticsQr)}
+        onClose={() => setAnalyticsQr(null)}
+        scans={scans}
+        settings={settings}
+        onSimulateScan={handleSimulateScan}
+        onToggleActive={handleToggleActive}
+      />
+
+      <DeploymentModal
+        isOpen={isDeploymentOpen}
+        onClose={() => setIsDeploymentOpen(false)}
+        settings={settings}
+        qrs={qrs}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onSaveSettings={(s) => setSettings(s)}
+        qrs={qrs}
+        scans={scans}
+        onImportData={(newQrs, newScans) => {
+          setQrs(newQrs);
+          setScans(newScans);
+        }}
+        onResetToDemo={handleResetToDemo}
+      />
+    </div>
+  );
+}

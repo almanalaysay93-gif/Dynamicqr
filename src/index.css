@@ -1,0 +1,131 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* Light Theme Blue & White Claymorphism System */
+.clay-card {
+  background: #ffffff;
+  border-radius: 1.5rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 
+    8px 14px 28px -4px rgba(15, 23, 42, 0.06),
+    -4px -4px 16px 0px rgba(255, 255, 255, 0.95),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.9),
+    inset -1px -1px 3px rgba(15, 23, 42, 0.02);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clay-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    12px 20px 34px -4px rgba(37, 99, 235, 0.09),
+    -6px -6px 20px 0px rgba(255, 255, 255, 1),
+    inset 1px 1px 2px rgba(255, 255, 255, 1),
+    inset -1px -1px 3px rgba(37, 99, 235, 0.03);
+}
+
+.clay-card-flat {
+  background: #ffffff;
+  border-radius: 1.25rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 
+    6px 10px 20px -2px rgba(15, 23, 42, 0.04),
+    -3px -3px 12px 0px rgba(255, 255, 255, 0.9),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.95);
+}
+
+.clay-inset {
+  background: #f1f5f9;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 
+    inset 2px 2px 6px rgba(15, 23, 42, 0.06),
+    inset -2px -2px 6px rgba(255, 255, 255, 0.9);
+}
+
+.clay-button-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 
+    0 6px 16px -2px rgba(37, 99, 235, 0.35),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.4),
+    inset -2px -2px 4px rgba(30, 58, 138, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clay-button-primary:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 
+    0 8px 20px -2px rgba(37, 99, 235, 0.45),
+    inset 1px 1px 3px rgba(255, 255, 255, 0.5),
+    inset -2px -2px 4px rgba(30, 58, 138, 0.3);
+}
+
+.clay-button-primary:active {
+  transform: translateY(1px);
+  box-shadow: 
+    0 2px 6px -1px rgba(37, 99, 235, 0.3),
+    inset 2px 2px 4px rgba(30, 58, 138, 0.4);
+}
+
+.clay-button-secondary {
+  background: #ffffff;
+  color: #1e293b;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 
+    3px 4px 10px rgba(15, 23, 42, 0.04),
+    inset 1px 1px 2px rgba(255, 255, 255, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clay-button-secondary:hover {
+  transform: translateY(-1px);
+  background: #f8fafc;
+  border-color: #94a3b8;
+  box-shadow: 
+    4px 6px 14px rgba(15, 23, 42, 0.06),
+    inset 1px 1px 2px rgba(255, 255, 255, 1);
+}
+
+.clay-button-secondary:active {
+  transform: translateY(1px);
+  box-shadow: inset 2px 2px 4px rgba(15, 23, 42, 0.08);
+}
+
+.clay-pill {
+  border-radius: 9999px;
+  box-shadow: 
+    2px 3px 6px rgba(15, 23, 42, 0.04),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+/* Premium smooth light scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

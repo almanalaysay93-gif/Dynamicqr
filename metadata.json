@@ -1,0 +1,6 @@
+{
+  "name": "DynoQR - Multi-QR Dynamic QR Hosting Platform",
+  "description": "Host, redirect, and track unlimited dynamic QR codes under one account with custom slugs, live destination editing, and per-QR scan analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
