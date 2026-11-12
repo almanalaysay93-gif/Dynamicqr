@@ -41,11 +41,17 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
   }
   const activeQr = qr || lastQrRef.current;
 
+  const basePath = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
+    ? import.meta.env.BASE_URL
+    : '/'
+  ).replace(/\/+$/, '');
+
   const shortLink = activeQr
     ? buildShortLink(
         activeQr.slug,
         settings,
-        typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+        typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : 'http://localhost:3000',
+        activeQr.destination
       )
     : '';
 

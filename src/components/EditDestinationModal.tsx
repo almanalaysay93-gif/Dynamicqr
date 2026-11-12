@@ -90,8 +90,38 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
     }
   };
 
+  const handleDestinationChange = (newDest: string) => {
+    setDestination(newDest);
+    if (!slugManuallyEdited && activeQr && name.trim() === activeQr.name) {
+      const trimmed = newDest.trim();
+      if (trimmed && trimmed !== activeQr.destination) {
+        const cleaned = trimmed
+          .replace(/^https?:\/\/(www\.)?/i, '')
+          .replace(/\.(com|org|net|io|co|ph|app|dev|me|link|gg|tv|edu|gov)(\/|$)/i, '-')
+          .replace(/[?#].*$/, '');
+        if (cleaned.length >= 2) {
+          setSlug(generateSlug(cleaned, otherSlugs));
+        }
+      } else if (trimmed === activeQr.destination) {
+        setSlug(activeQr.slug);
+      }
+    }
+  };
+
   const handleSlugInputChange = (rawVal: string) => {
     setSlugManuallyEdited(true);
+    const trimmed = rawVal.trim();
+    // If user pastes or types an external website URL/domain into Short Link, update destination too
+    if (
+      !/\/r\//i.test(trimmed) &&
+      (/^https?:\/\/[a-z0-9.-]+\.[a-z]{2,}/i.test(trimmed) ||
+        /^(www\.)?[a-z0-9-]+\.(com|org|net|io|co|ph|app|dev|me|link|gg|tv|edu|gov)(\/.*)?$/i.test(trimmed))
+    ) {
+      const normalized = normalizeDestinationUrl(trimmed);
+      if (normalized.valid) {
+        setDestination(normalized.url);
+      }
+    }
     setSlug(normalizeSlugInput(rawVal));
   };
 
@@ -292,7 +322,7 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
             <input
               type="text"
               value={destination}
-              onChange={(e) => setDestination(e.target.value)}
+              onChange={(e) => handleDestinationChange(e.target.value)}
               placeholder="https://..."
               className="w-full clay-inset px-4 py-2.5 text-xs font-mono text-blue-700 font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500"
               required

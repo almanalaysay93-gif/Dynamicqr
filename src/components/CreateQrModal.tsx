@@ -103,11 +103,16 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
   }, [name, slugManuallyEdited, existingQrs]);
 
   // Live QR preview generation
+  const basePath = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
+    ? import.meta.env.BASE_URL
+    : '/'
+  ).replace(/\/+$/, '');
   const candidateSlug = slug.trim() || 'preview-slug';
   const candidateShortLink = buildShortLink(
     candidateSlug,
     settings,
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : 'http://localhost:3000',
+    destination
   );
 
   useEffect(() => {

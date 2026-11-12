@@ -207,19 +207,29 @@ export function extractPlaceIdFromGoogleUrl(rawInput: string): string | null {
 
 
 /**
- * Builds the full short link URL for a dynamic QR code
+ * Builds the full short link URL for a dynamic QR code.
+ * When destination is provided, appends ?to=<encodedDestination> so cross-device camera scans
+ * always route to the latest destination even without shared browser localStorage.
  */
 export function buildShortLink(
   slug: string,
   settings: PlatformSettings,
-  currentOrigin: string = 'http://localhost:3000'
+  currentOrigin: string = 'http://localhost:3000',
+  destination?: string
 ): string {
+  let base: string;
   if (settings.useCustomDomain && settings.customDomain.trim()) {
     const domain = settings.customDomain.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-    return `https://${domain}/r/${slug}`;
+    base = `https://${domain}/r/${slug}`;
+  } else {
+    const originClean = currentOrigin.replace(/\/+$/, '');
+    base = `${originClean}/r/${slug}`;
   }
-  const originClean = currentOrigin.replace(/\/+$/, '');
-  return `${originClean}/r/${slug}`;
+
+  if (destination && destination.trim()) {
+    return `${base}?to=${encodeURIComponent(destination.trim())}`;
+  }
+  return base;
 }
 
 /**
@@ -242,7 +252,7 @@ export function normalizeSlugInput(raw: string): string {
   if (rMatch && rMatch[1] !== undefined) {
     val = rMatch[1];
   } else {
-    val = val.replace(/^https?:\/\/[^/]+\/?/i, '').replace(/^\/+|\/+$/g, '');
+    val = val.replace(/^https?:\/\/(www\.)?/i, '').replace(/^\/+|\/+$/g, '');
   }
   return val
     .replace(/[^a-z0-9-]+/g, '-')

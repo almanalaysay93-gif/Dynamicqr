@@ -38,10 +38,10 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
     : '/'
   ).replace(/\/+$/, '');
 
-  const handleCopy = (slug: string, id: string) => {
-    const link = buildShortLink(slug, settings, `${window.location.origin}${basePath}`);
+  const handleCopy = (qr: DynamicQR) => {
+    const link = buildShortLink(qr.slug, settings, `${window.location.origin}${basePath}`, qr.destination);
     navigator.clipboard.writeText(link);
-    setCopiedId(id);
+    setCopiedId(qr.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -62,9 +62,14 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {qrs.map((qr) => {
-              const shortLink = buildShortLink(qr.slug, settings, `${window.location.origin}${basePath}`);
+              const shortLink = buildShortLink(
+                qr.slug,
+                settings,
+                `${window.location.origin}${basePath}`,
+                qr.destination
+              );
               const isCopied = copiedId === qr.id;
-              const localRedirectHref = `${basePath}/r/${qr.slug}`;
+              const localRedirectHref = `${basePath}/r/${qr.slug}?to=${encodeURIComponent(qr.destination)}`;
 
               return (
                 <tr key={qr.id} className="hover:bg-slate-50/80 transition-colors">
@@ -101,7 +106,7 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
                         {formatShortLinkDisplay(qr.slug, settings)}
                       </button>
                       <button
-                        onClick={() => handleCopy(qr.slug, qr.id)}
+                        onClick={() => handleCopy(qr)}
                         className="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded cursor-pointer"
                         title="Copy short link"
                       >

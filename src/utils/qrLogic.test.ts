@@ -72,6 +72,17 @@ test('buildShortLink uses custom domain when enabled, or local origin', () => {
   settings.useCustomDomain = false;
   const localLink = buildShortLink('promo-may', settings, 'http://localhost:3000');
   assert.equal(localLink, 'http://localhost:3000/r/promo-may');
+
+  const linkWithDest = buildShortLink(
+    'promo-may',
+    settings,
+    'http://localhost:3000',
+    'https://instagram.com/new-target'
+  );
+  assert.equal(
+    linkWithDest,
+    'http://localhost:3000/r/promo-may?to=https%3A%2F%2Finstagram.com%2Fnew-target'
+  );
 });
 
 test('filterQrs filters correctly by folder, status and search query', () => {
@@ -259,6 +270,7 @@ test('formatShortLinkDisplay and normalizeSlugInput update short links cleanly',
 
   assert.equal(normalizeSlugInput('/r/New-Menu-2026'), 'new-menu-2026');
   assert.equal(normalizeSlugInput('https://go.link/r/Summer_Promo'), 'summer-promo');
+  assert.equal(normalizeSlugInput('https://youtube.com'), 'youtube-com');
   assert.equal(normalizeSlugInput('my custom link'), 'my-custom-link');
 });
 

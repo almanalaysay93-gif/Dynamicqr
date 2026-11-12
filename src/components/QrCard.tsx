@@ -51,12 +51,13 @@ export const QrCard: React.FC<QrCardProps> = ({
     ? import.meta.env.BASE_URL
     : '/'
   ).replace(/\/+$/, '');
-  const localRedirectHref = `${basePath}/r/${qr.slug}`;
+  const localRedirectHref = `${basePath}/r/${qr.slug}?to=${encodeURIComponent(qr.destination)}`;
 
   const shortLink = buildShortLink(
     qr.slug,
     settings,
-    typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : 'http://localhost:3000'
+    typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : 'http://localhost:3000',
+    qr.destination
   );
 
   useEffect(() => {

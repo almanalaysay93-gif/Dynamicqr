@@ -1,17 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { ExternalLink, CheckCircle2, AlertTriangle, ArrowLeft, QrCode, Loader2 } from 'lucide-react';
-import { DynamicQR, ScanRecord, PlatformSettings, createScanEvent } from '../utils/qrLogic';
+import {
+  DynamicQR,
+  ScanRecord,
+  PlatformSettings,
+  createScanEvent,
+  normalizeDestinationUrl,
+} from '../utils/qrLogic';
 
 interface RedirectScreenProps {
   slug: string;
+  targetOverride?: string | null;
   qrs: DynamicQR[];
   settings?: PlatformSettings;
-  onLogScan: (scan: ScanRecord, qrId: string) => void;
+  onLogScan: (scan: ScanRecord, qrId: string, syncedDestination?: string) => void;
   onBackToDashboard: () => void;
 }
 
 export const RedirectScreen: React.FC<RedirectScreenProps> = ({
   slug,
+  targetOverride,
   qrs,
   settings,
   onLogScan,
@@ -20,11 +28,48 @@ export const RedirectScreen: React.FC<RedirectScreenProps> = ({
   const [logged, setLogged] = useState(false);
 
   const cleanSlug = slug.toLowerCase().trim();
-  const matchedQr = qrs.find(
-    (q) =>
-      q.slug.toLowerCase() === cleanSlug ||
-      (q.previousSlugs && q.previousSlugs.some((ps) => ps.toLowerCase() === cleanSlug))
-  );
+
+  const matchedQr = useMemo(() => {
+    // 1. Prioritize exact current slug match before falling back to previousSlugs
+    const exactMatch = qrs.find((q) => q.slug.toLowerCase() === cleanSlug);
+    const prevMatch =
+      exactMatch ||
+      qrs.find(
+        (q) => q.previousSlugs && q.previousSlugs.some((ps) => ps.toLowerCase() === cleanSlug)
+      );
+
+    // 2. If QR scan URL contains ?to=<destination>, override stale device localStorage
+    const overrideCheck = targetOverride ? normalizeDestinationUrl(targetOverride) : null;
+    const validOverrideUrl = overrideCheck?.valid ? overrideCheck.url : null;
+
+    if (prevMatch) {
+      if (validOverrideUrl && prevMatch.destination !== validOverrideUrl) {
+        return {
+          ...prevMatch,
+          destination: validOverrideUrl,
+        };
+      }
+      return prevMatch;
+    }
+
+    // 3. If scanned on a separate device (phone) that doesn't have this custom QR in its localStorage yet
+    if (validOverrideUrl) {
+      return {
+        id: `qr-remote-${cleanSlug}`,
+        name: cleanSlug,
+        slug: cleanSlug,
+        folder: 'Default',
+        destination: validOverrideUrl,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        totalScans: 0,
+      } satisfies DynamicQR;
+    }
+
+    return undefined;
+  }, [qrs, cleanSlug, targetOverride]);
+
   const delayMs = Math.max(0, settings?.redirectDelayMs ?? 0);
 
   useEffect(() => {
@@ -37,7 +82,7 @@ export const RedirectScreen: React.FC<RedirectScreenProps> = ({
             ? document.referrer
             : 'Direct Dynamic QR Scan',
       });
-      onLogScan(scanEvent, matchedQr.id);
+      onLogScan(scanEvent, matchedQr.id, matchedQr.destination);
       setLogged(true);
     }
 

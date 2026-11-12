@@ -43,16 +43,22 @@ const STORAGE_KEY_FOLDERS = 'dynoqr_custom_folders_v1';
 
 export default function App() {
   const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
+  const [redirectTargetOverride, setRedirectTargetOverride] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
+      const searchParams = new URLSearchParams(window.location.search);
+      const toParam = searchParams.get('to') || searchParams.get('u') || searchParams.get('dest');
+      if (toParam) {
+        setRedirectTargetOverride(toParam);
+      }
+
       const match = path.match(/\/r\/([a-zA-Z0-9_-]+)\/?$/);
       if (match && match[1]) {
         setRedirectSlug(match[1]);
         return;
       }
-      const searchParams = new URLSearchParams(window.location.search);
       const querySlug = searchParams.get('r');
       if (querySlug) {
         setRedirectSlug(querySlug);
@@ -105,12 +111,24 @@ export default function App() {
     return [];
   });
 
-  // Save to localStorage
+  // Save to localStorage & sync across browser tabs
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_QRS, JSON.stringify(qrs));
     } catch (e) {}
   }, [qrs]);
+
+  useEffect(() => {
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY_QRS && e.newValue) {
+        try {
+          setQrs(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, []);
 
   useEffect(() => {
     try {
@@ -232,8 +250,8 @@ export default function App() {
     const cleanedSlug = newSlug?.trim().toLowerCase() || oldSlug;
     const slugChanged = Boolean(cleanedSlug && oldSlug && cleanedSlug !== oldSlug);
 
-    setQrs((prev) =>
-      prev.map((q) => {
+    setQrs((prev) => {
+      const next = prev.map((q) => {
         if (q.id === qrId) {
           const nextSlug = cleanedSlug || q.slug;
           const prevSlugs = new Set<string>(q.previousSlugs || []);
@@ -259,8 +277,12 @@ export default function App() {
           };
         }
         return q;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY_QRS, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     if (slugChanged && cleanedSlug && oldSlug) {
       setScans((prev) =>
@@ -319,11 +341,45 @@ export default function App() {
     showToast(`Simulated scan on "${qr.name}" from ${scanEvent.city}!`);
   };
 
-  const handleLogScanFromRedirect = (scan: ScanRecord, qrId: string) => {
+  const handleLogScanFromRedirect = (
+    scan: ScanRecord,
+    qrId: string,
+    syncedDestination?: string
+  ) => {
     setScans((prev) => [scan, ...prev]);
-    setQrs((prev) =>
-      prev.map((q) => (q.id === qrId ? { ...q, totalScans: (q.totalScans || 0) + 1 } : q))
-    );
+    setQrs((prev) => {
+      const exists = prev.some((q) => q.id === qrId || q.slug.toLowerCase() === scan.slug.toLowerCase());
+      const next = exists
+        ? prev.map((q) =>
+            q.id === qrId || q.slug.toLowerCase() === scan.slug.toLowerCase()
+              ? {
+                  ...q,
+                  destination: syncedDestination || q.destination,
+                  totalScans: (q.totalScans || 0) + 1,
+                }
+              : q
+          )
+        : syncedDestination
+        ? [
+            {
+              id: qrId,
+              name: scan.slug,
+              slug: scan.slug,
+              folder: 'Default',
+              destination: syncedDestination,
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              totalScans: 1,
+            },
+            ...prev,
+          ]
+        : prev;
+      try {
+        localStorage.setItem(STORAGE_KEY_QRS, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
 
   const handleExportCsv = () => {
@@ -360,11 +416,13 @@ export default function App() {
     return (
       <RedirectScreen
         slug={redirectSlug}
+        targetOverride={redirectTargetOverride}
         qrs={qrs}
         settings={settings}
         onLogScan={handleLogScanFromRedirect}
         onBackToDashboard={() => {
           setRedirectSlug(null);
+          setRedirectTargetOverride(null);
           if (window.history.pushState) {
             window.history.pushState('', '/', baseUrl);
           }
