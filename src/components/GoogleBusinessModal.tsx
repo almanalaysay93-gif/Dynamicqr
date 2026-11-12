@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Star,
@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import {
   DynamicQR,
-  PlatformSettings,
   generateSlug,
   buildGoogleReviewUrl,
   extractPlaceIdFromGoogleUrl,
 } from '../utils/qrLogic';
+import { ModalPortal } from './ModalPortal';
 
 interface GoogleBusinessModalProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ interface GoogleBusinessModalProps {
   onGenerateQr: (newQr: DynamicQR) => void;
   existingQrs: DynamicQR[];
   folders: string[];
+  defaultFolder?: string;
 }
 
 export const GoogleBusinessModal: React.FC<GoogleBusinessModalProps> = ({
@@ -34,6 +35,7 @@ export const GoogleBusinessModal: React.FC<GoogleBusinessModalProps> = ({
   onGenerateQr,
   existingQrs,
   folders,
+  defaultFolder,
 }) => {
   const [businessName, setBusinessName] = useState('');
   const [address, setAddress] = useState('');
@@ -41,7 +43,15 @@ export const GoogleBusinessModal: React.FC<GoogleBusinessModalProps> = ({
   const [folder, setFolder] = useState(folders[0] || 'Google Reviews');
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      const preferred =
+        defaultFolder && defaultFolder !== 'all'
+          ? defaultFolder
+          : folders[0] || 'Google Reviews';
+      setFolder(preferred);
+    }
+  }, [isOpen, defaultFolder, folders]);
 
   // Extracted Place ID if present
   const detectedPlaceId = extractPlaceIdFromGoogleUrl(placeIdOrUrl) || '';
@@ -89,12 +99,21 @@ export const GoogleBusinessModal: React.FC<GoogleBusinessModalProps> = ({
     };
 
     onGenerateQr(newQr);
+    setBusinessName('');
+    setAddress('');
+    setPlaceIdOrUrl('');
+    setCopied(false);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-xl w-full shadow-2xl overflow-hidden my-6 border border-slate-200 bg-white">
+    <ModalPortal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidthClass="max-w-xl"
+      ariaLabel="Google Business Profile Review Generator"
+    >
+      <div>
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
@@ -264,6 +283,6 @@ export const GoogleBusinessModal: React.FC<GoogleBusinessModalProps> = ({
         </form>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 };

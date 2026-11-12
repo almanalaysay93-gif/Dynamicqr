@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Check, Globe, Database, Save, RotateCcw, Upload, Download } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Check, Globe, Database, Save, RotateCcw, Upload, Download, AlertCircle } from 'lucide-react';
 import { PlatformSettings, DynamicQR, ScanRecord } from '../utils/qrLogic';
+import { ModalPortal } from './ModalPortal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -27,8 +28,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [useCustomDomain, setUseCustomDomain] = useState(settings.useCustomDomain);
   const [redirectDelayMs, setRedirectDelayMs] = useState(settings.redirectDelayMs);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const saveTimerRef = useRef<number | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setCustomDomain(settings.customDomain);
+      setUseCustomDomain(settings.useCustomDomain);
+      setRedirectDelayMs(settings.redirectDelayMs);
+      setSavedNotice(false);
+      setStatusError(null);
+      setConfirmingReset(false);
+    }
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [isOpen, settings]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,30 +57,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       redirectDelayMs: Number(redirectDelayMs),
     });
     setSavedNotice(true);
-    setTimeout(() => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
       setSavedNotice(false);
       onClose();
-    }, 1000);
+    }, 650);
   };
 
   const handleExportJson = () => {
     const data = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      settings: { ...settings, customDomain, useCustomDomain },
+      settings: { ...settings, customDomain, useCustomDomain, redirectDelayMs: Number(redirectDelayMs) },
       qrs,
       scans,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `dynoqr-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setStatusError(null);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -70,21 +92,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.qrs && Array.isArray(parsed.qrs)) {
           onImportData(parsed.qrs, parsed.scans || []);
-          alert(`Successfully imported ${parsed.qrs.length} Dynamic QRs!`);
           onClose();
         } else {
-          alert('Invalid backup file format: missing "qrs" array.');
+          setStatusError('Invalid backup file format: missing "qrs" array.');
         }
       } catch {
-        alert('Failed to parse JSON file.');
+        setStatusError('Failed to parse JSON backup file.');
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-lg w-full shadow-2xl overflow-hidden my-6 border border-slate-200 bg-white">
+    <ModalPortal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidthClass="max-w-lg"
+      ariaLabel="Platform Settings & Custom Domain"
+    >
+      <div>
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
@@ -194,17 +221,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('Reset to initial sample dynamic QRs?')) {
-                    onResetToDemo();
-                    onClose();
+                  if (!confirmingReset) {
+                    setConfirmingReset(true);
+                    return;
                   }
+                  onResetToDemo();
+                  setConfirmingReset(false);
+                  onClose();
                 }}
-                className="px-3 py-1.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold flex items-center gap-1.5 ml-auto transition-colors cursor-pointer"
+                className={`px-3 py-1.5 rounded-full border text-xs font-semibold flex items-center gap-1.5 ml-auto transition-colors cursor-pointer ${
+                  confirmingReset
+                    ? 'bg-rose-600 text-white border-rose-700'
+                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                }`}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset Demo</span>
+                <span>{confirmingReset ? 'Confirm Reset?' : 'Reset Demo'}</span>
               </button>
             </div>
+            {statusError && (
+              <div className="mt-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{statusError}</span>
+              </div>
+            )}
           </div>
 
           {/* Action Footer */}
@@ -238,6 +278,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </form>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 };

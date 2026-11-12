@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Check,
@@ -14,6 +14,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { DynamicQR, CenterLogoPreset, CenterLogoConfig, normalizeDestinationUrl } from '../utils/qrLogic';
+import { ModalPortal } from './ModalPortal';
 
 interface EditDestinationModalProps {
   qr: DynamicQR | null;
@@ -28,10 +29,16 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const [destination, setDestination] = useState(qr?.destination || '');
-  const [name, setName] = useState(qr?.name || '');
-  const [logoType, setLogoType] = useState<CenterLogoPreset>(qr?.styling?.centerLogo?.type || 'none');
-  const [customLogoUrl, setCustomLogoUrl] = useState<string>(qr?.styling?.centerLogo?.customUrl || '');
+  const lastQrRef = useRef<DynamicQR | null>(qr);
+  if (qr) {
+    lastQrRef.current = qr;
+  }
+  const activeQr = qr || lastQrRef.current;
+
+  const [destination, setDestination] = useState(activeQr?.destination || '');
+  const [name, setName] = useState(activeQr?.name || '');
+  const [logoType, setLogoType] = useState<CenterLogoPreset>(activeQr?.styling?.centerLogo?.type || 'none');
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>(activeQr?.styling?.centerLogo?.customUrl || '');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,10 +51,9 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
     }
   }, [qr]);
 
-  if (!isOpen || !qr) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeQr) return;
     setError(null);
 
     const check = normalizeDestinationUrl(destination);
@@ -61,7 +67,7 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
       customUrl: logoType === 'custom' ? customLogoUrl : undefined,
     };
 
-    onSave(qr.id, check.url, name.trim() || qr.name, updatedLogo);
+    onSave(activeQr.id, check.url, name.trim() || activeQr.name, updatedLogo);
     onClose();
   };
 
@@ -86,15 +92,20 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 bg-white my-6">
-        
+    <ModalPortal
+      isOpen={isOpen && Boolean(activeQr)}
+      onClose={onClose}
+      maxWidthClass="max-w-lg"
+      ariaLabel="Edit Dynamic Target"
+    >
+      {activeQr && (
+        <div>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">Edit Dynamic Target</h2>
             <p className="text-xs text-blue-600 font-mono font-semibold mt-0.5">
-              Short Link: /r/{qr.slug}
+              Short Link: /r/{activeQr.slug}
             </p>
           </div>
           <button
@@ -249,7 +260,7 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
           <div className="clay-inset p-3 text-xs space-y-1">
             <div className="flex items-center gap-1.5 truncate text-slate-500">
               <span className="font-semibold text-slate-400">Previous:</span>
-              <span className="truncate line-through text-slate-500">{qr.destination}</span>
+              <span className="truncate line-through text-slate-500">{activeQr.destination}</span>
             </div>
             <div className="flex items-center gap-1.5 truncate text-blue-700 font-semibold">
               <ArrowRight className="w-3.5 h-3.5 shrink-0 text-blue-600" />
@@ -262,13 +273,13 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="clay-button-secondary px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
+              className="clay-button-secondary px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="clay-button-primary px-5 py-2.5 text-xs font-bold text-white flex items-center gap-1.5"
+              className="clay-button-primary px-5 py-2.5 text-xs font-bold text-white flex items-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
               <span>Update Destination Instantly</span>
@@ -276,8 +287,8 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
           </div>
 
         </form>
-
-      </div>
-    </div>
+        </div>
+      )}
+    </ModalPortal>
   );
 };

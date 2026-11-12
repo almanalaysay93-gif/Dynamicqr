@@ -187,6 +187,18 @@ export async function generateQrDataUrl(
 }
 
 /**
+ * Escapes HTML special characters for safe document writing
+ */
+export function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Generates raw SVG string for crisp vector printing and SVG download
  */
 export async function generateQrSvgString(
@@ -217,25 +229,34 @@ export async function generateQrSvgString(
       errorCorrectionLevel: effectiveEcc,
     });
 
-    // If center logo requested, inject the centered logo overlay into SVG
+    // If center logo requested, inject the centered logo overlay using the SVG's viewBox coordinate space
     if (hasLogo && svg.includes('</svg>')) {
-      const badgeSize = Math.floor(width * 0.22);
-      const bx = (width - badgeSize) / 2;
-      const by = (width - badgeSize) / 2;
-      const radius = Math.floor(badgeSize * 0.24);
+      const vbMatch = svg.match(/viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/i);
+      const vbSize = vbMatch ? parseFloat(vbMatch[1]) : width;
+
+      const badgeSize = Number((vbSize * 0.22).toFixed(3));
+      const bx = Number(((vbSize - badgeSize) / 2).toFixed(3));
+      const by = Number(((vbSize - badgeSize) / 2).toFixed(3));
+      const radius = Number((badgeSize * 0.24).toFixed(3));
+      const strokeWidth = Number(Math.max(0.15, vbSize * 0.006).toFixed(3));
+      const iconPad = Number((badgeSize * 0.18).toFixed(3));
+      const iconSize = Number((badgeSize - iconPad * 2).toFixed(3));
+      const ix = Number((bx + iconPad).toFixed(3));
+      const iy = Number((by + iconPad).toFixed(3));
 
       let innerContent = '';
       if (centerLogo.type === 'custom' && centerLogo.customUrl) {
-        innerContent = `<image href="${centerLogo.customUrl}" x="${bx + badgeSize * 0.18}" y="${by + badgeSize * 0.18}" width="${badgeSize * 0.64}" height="${badgeSize * 0.64}"/>`;
+        innerContent = `<image href="${escapeHtml(centerLogo.customUrl)}" x="${ix}" y="${iy}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet"/>`;
       } else if (PRESET_SVGS[centerLogo.type]) {
-        // Embed the preset svg
-        const presetRaw = PRESET_SVGS[centerLogo.type];
-        const innerMatch = presetRaw.replace(/<\?xml.*?\?>/i, '').replace(/<svg[^>]*>|<\/svg>/gi, '');
-        innerContent = `<g transform="translate(${bx + badgeSize * 0.18}, ${by + badgeSize * 0.18}) scale(${(badgeSize * 0.64) / 24})">${innerMatch}</g>`;
+        const presetRaw = PRESET_SVGS[centerLogo.type].trim();
+        innerContent = presetRaw.replace(
+          /^<svg\b([^>]*)>/i,
+          `<svg$1 x="${ix}" y="${iy}" width="${iconSize}" height="${iconSize}">`
+        );
       }
 
       const overlay = `
-        <rect x="${bx}" y="${by}" width="${badgeSize}" height="${badgeSize}" rx="${radius}" fill="${centerLogo.bgColor || '#FFFFFF'}" stroke="#E2E8F0" stroke-width="1.5" />
+        <rect x="${bx}" y="${by}" width="${badgeSize}" height="${badgeSize}" rx="${radius}" fill="${escapeHtml(centerLogo.bgColor || '#FFFFFF')}" stroke="#E2E8F0" stroke-width="${strokeWidth}" />
         ${innerContent}
       </svg>`;
 
@@ -305,6 +326,10 @@ export async function printQrStandSheet(
   destination: string,
   options: QrRenderOptions = {}
 ) {
+  // Open window synchronously on user gesture before async QR generation so popup blockers do not block it
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+
   const dataUrl = await generateQrDataUrl(shortLink, {
     ...options,
     width: 600,
@@ -312,15 +337,16 @@ export async function printQrStandSheet(
     errorCorrectionLevel: 'H',
   });
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
+  const safeName = escapeHtml(qrName);
+  const safeShortLink = escapeHtml(shortLink);
+  const safeDestination = escapeHtml(destination);
 
   printWindow.document.write(`
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Print Dynamic QR - ${qrName}</title>
+  <title>Print Dynamic QR - ${safeName}</title>
   <style>
     @page { size: A4 portrait; margin: 15mm; }
     body {
@@ -419,18 +445,18 @@ export async function printQrStandSheet(
 <body>
   <div class="card">
     <div class="badge">Scan with Camera</div>
-    <h1>${qrName}</h1>
+    <h1>${safeName}</h1>
     <div class="subtitle">Point your mobile camera to open instantly</div>
     
     <div class="qr-frame">
-      <img src="${dataUrl}" alt="${qrName}" />
+      <img src="${dataUrl}" alt="${safeName}" />
     </div>
 
     <div class="scan-cue">Instant Dynamic Gateway</div>
-    <div class="short-link">${shortLink}</div>
+    <div class="short-link">${safeShortLink}</div>
     
     <div class="footer-note">
-      Powered by DynoQR Dynamic Redirects · Target: ${destination}
+      Powered by DynoQR Dynamic Redirects · Target: ${safeDestination}
     </div>
   </div>
 

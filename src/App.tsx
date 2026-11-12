@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   LayoutGrid,
   List,
   Plus,
-  ArrowUpDown,
-  Sparkles,
   QrCode,
   CheckCircle2,
-  Tag,
+  Trash2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   DynamicQR,
   ScanRecord,
@@ -20,6 +21,7 @@ import {
   filterQrs,
   exportQrsToCsv,
   createScanEvent,
+  generateSlug,
 } from './utils/qrLogic';
 import { TopNav } from './components/TopNav';
 import { CampaignBar } from './components/CampaignBar';
@@ -32,10 +34,12 @@ import { DeploymentModal } from './components/DeploymentModal';
 import { SettingsModal } from './components/SettingsModal';
 import { RedirectScreen } from './components/RedirectScreen';
 import { GoogleBusinessModal } from './components/GoogleBusinessModal';
+import { ModalPortal } from './components/ModalPortal';
 
 const STORAGE_KEY_QRS = 'dynoqr_hosted_qrs_v1';
 const STORAGE_KEY_SCANS = 'dynoqr_scan_logs_v1';
 const STORAGE_KEY_SETTINGS = 'dynoqr_settings_v1';
+const STORAGE_KEY_FOLDERS = 'dynoqr_custom_folders_v1';
 
 export default function App() {
   const [redirectSlug, setRedirectSlug] = useState<string | null>(null);
@@ -43,7 +47,7 @@ export default function App() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname;
-      const match = path.match(/^\/r\/([a-zA-Z0-9_-]+)/);
+      const match = path.match(/\/r\/([a-zA-Z0-9_-]+)\/?$/);
       if (match && match[1]) {
         setRedirectSlug(match[1]);
         return;
@@ -93,6 +97,14 @@ export default function App() {
     };
   });
 
+  const [customFolders, setCustomFolders] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_FOLDERS);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
+
   // Save to localStorage
   useEffect(() => {
     try {
@@ -112,6 +124,12 @@ export default function App() {
     } catch (e) {}
   }, [settings]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_FOLDERS, JSON.stringify(customFolders));
+    } catch (e) {}
+  }, [customFolders]);
+
   // View state & filters
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -126,16 +144,29 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingQr, setEditingQr] = useState<DynamicQR | null>(null);
   const [analyticsQr, setAnalyticsQr] = useState<DynamicQR | null>(null);
+  const [deletingQrId, setDeletingQrId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
-  // Derived folder list
+  // Derived folder list combining QR folders + user-created custom folders
   const folders = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(customFolders);
     qrs.forEach((q) => {
       if (q.folder) set.add(q.folder);
     });
     return Array.from(set).sort();
-  }, [qrs]);
+  }, [qrs, customFolders]);
+
+  // Keep analytics modal synced with live QR state (totalScans, isActive, destination)
+  const liveAnalyticsQr = useMemo(() => {
+    if (!analyticsQr) return null;
+    return qrs.find((q) => q.id === analyticsQr.id) || analyticsQr;
+  }, [qrs, analyticsQr]);
+
+  const deletingQrTarget = useMemo(() => {
+    if (!deletingQrId) return null;
+    return qrs.find((q) => q.id === deletingQrId) || null;
+  }, [qrs, deletingQrId]);
 
   // Filtered and sorted QRs
   const filteredQrs = useMemo(() => {
@@ -161,8 +192,14 @@ export default function App() {
   }, [qrs, selectedFolder, statusFilter, searchQuery, sortBy]);
 
   const showToast = (msg: string) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+      toastTimerRef.current = null;
+    }, 3000);
   };
 
   const handleCreateQr = (newQr: DynamicQR) => {
@@ -214,10 +251,13 @@ export default function App() {
   };
 
   const handleDuplicateQr = (qr: DynamicQR) => {
-    const newSlug = `${qr.slug}-copy`;
+    const newSlug = generateSlug(
+      `${qr.slug}-copy`,
+      qrs.map((q) => q.slug)
+    );
     const copy: DynamicQR = {
       ...qr,
-      id: `qr-${Date.now()}`,
+      id: `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: `${qr.name} (Copy)`,
       slug: newSlug,
       totalScans: 0,
@@ -229,11 +269,14 @@ export default function App() {
   };
 
   const handleDeleteQr = (qrId: string) => {
-    const target = qrs.find((q) => q.id === qrId);
-    if (confirm(`Delete dynamic QR "${target?.name || ''}"?`)) {
-      setQrs((prev) => prev.filter((q) => q.id !== qrId));
-      showToast('Dynamic QR deleted.');
-    }
+    setDeletingQrId(qrId);
+  };
+
+  const confirmDeleteQr = () => {
+    if (!deletingQrId) return;
+    setQrs((prev) => prev.filter((q) => q.id !== deletingQrId));
+    setDeletingQrId(null);
+    showToast('Dynamic QR deleted.');
   };
 
   const handleSimulateScan = (qr: DynamicQR) => {
@@ -260,37 +303,44 @@ export default function App() {
   const handleExportCsv = () => {
     const csvContent = exportQrsToCsv(qrs, settings);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `dynoqr-all-qrs-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
+    URL.revokeObjectURL(url);
     showToast('CSV export downloaded!');
   };
 
   const handleCreateFolder = (newFolderName: string) => {
-    if (!folders.includes(newFolderName)) {
-      setSelectedFolder(newFolderName);
-      showToast(`Campaign folder "${newFolderName}" created!`);
-    }
+    const clean = newFolderName.trim();
+    if (!clean) return;
+    setCustomFolders((prev) => (prev.includes(clean) ? prev : [...prev, clean]));
+    setSelectedFolder(clean);
+    showToast(`Campaign folder "${clean}" ready!`);
   };
 
   const handleResetToDemo = () => {
     setQrs(getInitialDemoQrs());
     setScans(getInitialDemoScans());
+    setCustomFolders([]);
+    setSelectedFolder('all');
     showToast('Reset to demo dynamic QRs!');
   };
 
   // If hitting a redirect directly in browser (e.g. /r/reviews-kansas)
   if (redirectSlug) {
+    const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
     return (
       <RedirectScreen
         slug={redirectSlug}
         qrs={qrs}
+        settings={settings}
         onLogScan={handleLogScanFromRedirect}
         onBackToDashboard={() => {
           setRedirectSlug(null);
           if (window.history.pushState) {
-            window.history.pushState('', '/', window.location.pathname);
+            window.history.pushState('', '/', baseUrl);
           }
         }}
       />
@@ -414,21 +464,32 @@ export default function App() {
         {/* Dynamic QR Cards Grid / Table */}
         {filteredQrs.length > 0 ? (
           viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredQrs.map((qr) => (
-                <QrCard
-                  key={qr.id}
-                  qr={qr}
-                  settings={settings}
-                  onEditDestination={(q) => setEditingQr(q)}
-                  onOpenAnalytics={(q) => setAnalyticsQr(q)}
-                  onToggleActive={handleToggleActive}
-                  onDuplicate={handleDuplicateQr}
-                  onDelete={handleDeleteQr}
-                  onSimulateScan={handleSimulateScan}
-                />
-              ))}
-            </div>
+            <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <AnimatePresence mode="popLayout">
+                {filteredQrs.map((qr) => (
+                  <motion.div
+                    key={qr.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                    className="flex flex-col"
+                  >
+                    <QrCard
+                      qr={qr}
+                      settings={settings}
+                      onEditDestination={(q) => setEditingQr(q)}
+                      onOpenAnalytics={(q) => setAnalyticsQr(q)}
+                      onToggleActive={handleToggleActive}
+                      onDuplicate={handleDuplicateQr}
+                      onDelete={handleDeleteQr}
+                      onSimulateScan={handleSimulateScan}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </motion.div>
           ) : (
             <QrTableView
               qrs={filteredQrs}
@@ -482,13 +543,70 @@ export default function App() {
         )}
       </main>
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 clay-card border border-blue-200 text-slate-900 text-xs px-5 py-3 shadow-xl flex items-center gap-2.5 animate-bounce bg-white">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span className="font-semibold">{toastMessage}</span>
+      {/* Animated Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            key="app-toast"
+            initial={{ opacity: 0, y: 20, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+            className="fixed bottom-6 right-6 z-60 clay-modal border border-blue-200 text-slate-900 text-xs px-4 py-3 shadow-xl flex items-center gap-2.5 bg-white"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">{toastMessage}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="ml-1 p-0.5 text-slate-400 hover:text-slate-600 rounded cursor-pointer"
+              aria-label="Dismiss notification"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Pop-up Modal */}
+      <ModalPortal
+        isOpen={Boolean(deletingQrId)}
+        onClose={() => setDeletingQrId(null)}
+        maxWidthClass="max-w-sm"
+        ariaLabel="Confirm Delete Dynamic QR"
+      >
+        <div className="p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Delete Dynamic QR?</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-slate-800">
+                "{deletingQrTarget?.name || 'this QR'}"
+              </span>{' '}
+              (<code className="font-mono text-rose-600">/r/{deletingQrTarget?.slug}</code>)?
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => setDeletingQrId(null)}
+              className="clay-button-secondary px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteQr}
+              className="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete QR</span>
+            </button>
+          </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* Modals */}
       <CreateQrModal
@@ -498,6 +616,7 @@ export default function App() {
         existingQrs={qrs}
         folders={folders}
         settings={settings}
+        defaultFolder={selectedFolder}
       />
 
       <GoogleBusinessModal
@@ -506,6 +625,7 @@ export default function App() {
         onGenerateQr={handleCreateQr}
         existingQrs={qrs}
         folders={folders}
+        defaultFolder={selectedFolder}
       />
 
       <EditDestinationModal
@@ -516,7 +636,7 @@ export default function App() {
       />
 
       <QrAnalyticsModal
-        qr={analyticsQr}
+        qr={liveAnalyticsQr}
         isOpen={Boolean(analyticsQr)}
         onClose={() => setAnalyticsQr(null)}
         scans={scans}
@@ -536,12 +656,16 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={settings}
-        onSaveSettings={(s) => setSettings(s)}
+        onSaveSettings={(s) => {
+          setSettings(s);
+          showToast('Platform settings saved!');
+        }}
         qrs={qrs}
         scans={scans}
         onImportData={(newQrs, newScans) => {
           setQrs(newQrs);
           setScans(newScans);
+          showToast(`Imported ${newQrs.length} Dynamic QRs!`);
         }}
         onResetToDemo={handleResetToDemo}
       />

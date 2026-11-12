@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   X,
   Smartphone,
@@ -14,6 +14,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { DynamicQR, ScanRecord, PlatformSettings, buildShortLink } from '../utils/qrLogic';
+import { ModalPortal } from './ModalPortal';
 
 interface QrAnalyticsModalProps {
   qr: DynamicQR | null;
@@ -34,16 +35,24 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
   onSimulateScan,
   onToggleActive,
 }) => {
-  if (!isOpen || !qr) return null;
+  const lastQrRef = useRef<DynamicQR | null>(qr);
+  if (qr) {
+    lastQrRef.current = qr;
+  }
+  const activeQr = qr || lastQrRef.current;
 
-  const shortLink = buildShortLink(
-    qr.slug,
-    settings,
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
-  );
+  const shortLink = activeQr
+    ? buildShortLink(
+        activeQr.slug,
+        settings,
+        typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+      )
+    : '';
 
   // Filter scans specifically for this QR
-  const qrScans = scans.filter((s) => s.qrId === qr.id || s.slug === qr.slug);
+  const qrScans = activeQr
+    ? scans.filter((s) => s.qrId === activeQr.id || s.slug === activeQr.slug)
+    : [];
 
   // Device counts
   const deviceCounts = { Mobile: 0, Desktop: 0, Tablet: 0 };
@@ -62,22 +71,27 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
     .slice(0, 5);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-3xl w-full shadow-2xl overflow-hidden my-6 border border-slate-200 bg-white">
-        
+    <ModalPortal
+      isOpen={isOpen && Boolean(activeQr)}
+      onClose={onClose}
+      maxWidthClass="max-w-3xl"
+      ariaLabel={activeQr ? `Analytics for ${activeQr.name}` : 'QR Analytics'}
+    >
+      {activeQr && (
+        <div>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
           <div>
             <div className="flex items-center gap-2.5">
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight">{qr.name}</h2>
+              <h2 className="text-lg font-bold text-slate-900 tracking-tight">{activeQr.name}</h2>
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                qr.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
+                activeQr.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'
               }`}>
-                {qr.isActive ? 'Active' : 'Paused'}
+                {activeQr.isActive ? 'Active' : 'Paused'}
               </span>
             </div>
             <p className="text-xs text-blue-600 font-mono font-semibold mt-0.5">
-              Short Link: {shortLink} · Folder: {qr.folder}
+              Short Link: {shortLink} · Folder: {activeQr.folder}
             </p>
           </div>
           <button
@@ -97,30 +111,30 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
             <div className="space-y-1 min-w-0">
               <span className="text-slate-500 block font-bold uppercase tracking-wider text-[10px]">Target Destination:</span>
               <a
-                href={qr.destination}
+                href={activeQr.destination}
                 target="_blank"
                 rel="noreferrer"
                 className="text-blue-600 hover:text-blue-800 font-mono font-semibold flex items-center gap-1.5 truncate"
-                title={qr.destination}
+                title={activeQr.destination}
               >
-                <span className="truncate">{qr.destination}</span>
+                <span className="truncate">{activeQr.destination}</span>
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               </a>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => onSimulateScan(qr)}
+                onClick={() => onSimulateScan(activeQr)}
                 className="clay-button-primary px-3.5 py-2 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Simulate Scan</span>
               </button>
               <button
-                onClick={() => onToggleActive(qr.id)}
+                onClick={() => onToggleActive(activeQr.id)}
                 className="clay-button-secondary px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-600 cursor-pointer"
               >
-                {qr.isActive ? 'Pause QR' : 'Activate QR'}
+                {activeQr.isActive ? 'Pause QR' : 'Activate QR'}
               </button>
             </div>
           </div>
@@ -130,7 +144,7 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
             <div className="clay-inset p-4 bg-slate-50 border border-slate-200 rounded-xl">
               <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Total Scans</span>
               <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                {qr.totalScans.toLocaleString()}
+                {activeQr.totalScans.toLocaleString()}
               </div>
             </div>
 
@@ -151,7 +165,7 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
             <div className="clay-inset p-4 bg-slate-50 border border-slate-200 rounded-xl">
               <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Created</span>
               <div className="text-sm font-semibold text-slate-800 mt-2">
-                {new Date(qr.createdAt).toLocaleDateString()}
+                {new Date(activeQr.createdAt).toLocaleDateString()}
               </div>
             </div>
           </div>
@@ -281,8 +295,8 @@ export const QrAnalyticsModal: React.FC<QrAnalyticsModalProps> = ({
           </div>
 
         </div>
-
-      </div>
-    </div>
+        </div>
+      )}
+    </ModalPortal>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ExternalLink,
   Copy,
@@ -13,9 +13,12 @@ import {
   Play,
   FileCode,
   Tag,
+  X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { DynamicQR, PlatformSettings, buildShortLink } from '../utils/qrLogic';
 import { generateQrDataUrl, downloadQrPng, downloadQrSvg, printQrStandSheet } from '../utils/qrRenderer';
+import { ModalPortal } from './ModalPortal';
 
 interface QrCardProps {
   qr: DynamicQR;
@@ -42,12 +45,39 @@ export const QrCard: React.FC<QrCardProps> = ({
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const basePath = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
+    ? import.meta.env.BASE_URL
+    : '/'
+  ).replace(/\/+$/, '');
+  const localRedirectHref = `${basePath}/r/${qr.slug}`;
 
   const shortLink = buildShortLink(
     qr.slug,
     settings,
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    typeof window !== 'undefined' ? `${window.location.origin}${basePath}` : 'http://localhost:3000'
   );
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMenu]);
 
   useEffect(() => {
     let active = true;
@@ -74,9 +104,9 @@ export const QrCard: React.FC<QrCardProps> = ({
 
   return (
     <div
-      className={`clay-card p-5 sm:p-6 flex flex-col justify-between relative group bg-white border border-slate-200 transition-all ${
+      className={`clay-card p-5 sm:p-6 flex flex-col justify-between relative group bg-white border border-slate-200 ${
         !qr.isActive ? 'opacity-75 bg-slate-50/80' : ''
-      }`}
+      } ${showMenu ? 'z-30' : 'z-0'}`}
     >
       <div>
         {/* Top Header: Folder Chip & Status Toggle */}
@@ -148,7 +178,7 @@ export const QrCard: React.FC<QrCardProps> = ({
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
               <a
-                href={`/r/${qr.slug}`}
+                href={localRedirectHref}
                 target="_blank"
                 rel="noreferrer"
                 className="clay-button-secondary p-1.5 text-slate-600 hover:text-blue-600"
@@ -242,86 +272,104 @@ export const QrCard: React.FC<QrCardProps> = ({
         </div>
 
         {/* More Options */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
-            onClick={() => setShowMenu(!showMenu)}
+            onClick={() => setShowMenu((prev) => !prev)}
             className="clay-button-secondary p-2 text-slate-500 hover:text-slate-800 cursor-pointer"
             aria-label="More options"
+            aria-expanded={showMenu}
           >
             <MoreVertical className="w-3.5 h-3.5" />
           </button>
 
-          {showMenu && (
-            <div className="absolute right-0 bottom-full mb-1 w-44 clay-card p-1.5 z-20 text-xs text-slate-700 shadow-xl border border-slate-200 bg-white">
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  onDuplicate(qr);
-                }}
-                className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 cursor-pointer font-medium"
+          <AnimatePresence>
+            {showMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92, y: 6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 6 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute right-0 bottom-full mb-1.5 w-44 clay-modal p-1.5 z-40 text-xs text-slate-700 shadow-xl border border-slate-200 bg-white origin-bottom-right"
               >
-                <CopyCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Duplicate QR</span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  onDelete(qr.id);
-                }}
-                className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 flex items-center gap-2 cursor-pointer font-medium"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete QR</span>
-              </button>
-            </div>
-          )}
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    onDuplicate(qr);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-100 flex items-center gap-2 cursor-pointer font-medium transition-colors"
+                >
+                  <CopyCheck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Duplicate QR</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    onDelete(qr.id);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 text-rose-600 flex items-center gap-2 cursor-pointer font-medium transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete QR</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Enlarge Zoom Modal */}
-      {isZoomed && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setIsZoomed(false)}
-        >
-          <div
-            className="clay-card p-6 sm:p-8 max-w-sm w-full text-center space-y-4 bg-white border border-slate-200"
-            onClick={(e) => e.stopPropagation()}
+      {/* Enlarge Zoom Modal (Portaled to body so card hover transform never traps it) */}
+      <ModalPortal
+        isOpen={isZoomed}
+        onClose={() => setIsZoomed(false)}
+        maxWidthClass="max-w-sm"
+        ariaLabel={`Zoomed QR for ${qr.name}`}
+      >
+        <div className="p-6 sm:p-7 text-center space-y-4 relative">
+          <button
+            onClick={() => setIsZoomed(false)}
+            className="clay-button-secondary p-2 text-slate-400 hover:text-slate-700 absolute top-4 right-4 cursor-pointer"
+            aria-label="Close zoom preview"
           >
-            <h3 className="text-lg font-bold text-slate-900">{qr.name}</h3>
-            <p className="text-xs text-slate-500">
+            <X className="w-4 h-4" />
+          </button>
+
+          <div className="pr-6 pl-6">
+            <h3 className="text-lg font-bold text-slate-900 truncate" title={qr.name}>
+              {qr.name}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
               Point your phone camera to scan off the screen!
             </p>
+          </div>
 
-            <div className="clay-inset p-3 inline-block bg-slate-50 border border-slate-200">
-              <img
-                src={qrDataUrl}
-                alt={qr.name}
-                className="w-56 h-56 mx-auto bg-white p-2 rounded-xl shadow-xs"
-              />
-            </div>
+          <div className="clay-inset p-3 inline-block bg-slate-50 border border-slate-200">
+            <img
+              src={qrDataUrl}
+              alt={qr.name}
+              className="w-56 h-56 mx-auto bg-white p-2 rounded-xl shadow-xs"
+            />
+          </div>
 
-            <div className="text-xs font-mono text-blue-600 bg-blue-50 border border-blue-100 p-2 rounded-xl select-all font-semibold">
-              {shortLink}
-            </div>
+          <div className="text-xs font-mono text-blue-600 bg-blue-50 border border-blue-100 p-2 rounded-xl select-all font-semibold break-all">
+            {shortLink}
+          </div>
 
-            <div className="flex gap-2 justify-center pt-2">
-              <button
-                onClick={() => downloadQrPng(shortLink, qr.slug, 2048, qr.styling)}
-                className="clay-button-primary px-4 py-2 text-white text-xs font-bold cursor-pointer"
-              >
-                Download 2K PNG
-              </button>
-              <button
-                onClick={() => setIsZoomed(false)}
-                className="clay-button-secondary px-4 py-2 text-slate-700 text-xs font-semibold cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+          <div className="flex gap-2 justify-center pt-2">
+            <button
+              onClick={() => downloadQrPng(shortLink, qr.slug, 2048, qr.styling)}
+              className="clay-button-primary px-4 py-2 text-white text-xs font-bold cursor-pointer"
+            >
+              Download 2K PNG
+            </button>
+            <button
+              onClick={() => setIsZoomed(false)}
+              className="clay-button-secondary px-4 py-2 text-slate-700 text-xs font-semibold cursor-pointer"
+            >
+              Close
+            </button>
           </div>
         </div>
-      )}
+      </ModalPortal>
     </div>
   );
 };

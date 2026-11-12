@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ExternalLink, CheckCircle2, AlertTriangle, ArrowLeft, QrCode, Loader2 } from 'lucide-react';
-import { DynamicQR, ScanRecord, createScanEvent } from '../utils/qrLogic';
+import { DynamicQR, ScanRecord, PlatformSettings, createScanEvent } from '../utils/qrLogic';
 
 interface RedirectScreenProps {
   slug: string;
   qrs: DynamicQR[];
+  settings?: PlatformSettings;
   onLogScan: (scan: ScanRecord, qrId: string) => void;
   onBackToDashboard: () => void;
 }
@@ -12,18 +13,20 @@ interface RedirectScreenProps {
 export const RedirectScreen: React.FC<RedirectScreenProps> = ({
   slug,
   qrs,
+  settings,
   onLogScan,
   onBackToDashboard,
 }) => {
   const [logged, setLogged] = useState(false);
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
 
   const cleanSlug = slug.toLowerCase().trim();
   const matchedQr = qrs.find((q) => q.slug.toLowerCase() === cleanSlug);
+  const delayMs = Math.max(0, settings?.redirectDelayMs ?? 0);
 
   useEffect(() => {
-    if (matchedQr && matchedQr.isActive && !logged) {
-      // 1. Immediately record scan event
+    if (!matchedQr || !matchedQr.isActive) return;
+
+    if (!logged) {
       const scanEvent = createScanEvent(matchedQr, {
         referrer:
           typeof document !== 'undefined' && document.referrer
@@ -32,9 +35,9 @@ export const RedirectScreen: React.FC<RedirectScreenProps> = ({
       });
       onLogScan(scanEvent, matchedQr.id);
       setLogged(true);
+    }
 
-      // 2. Immediately forward directly to target site - 0 delay, no proceed button
-      setRedirectAttempted(true);
+    const performRedirect = () => {
       try {
         if (window.top && window.top !== window) {
           try {
@@ -45,15 +48,23 @@ export const RedirectScreen: React.FC<RedirectScreenProps> = ({
         } else {
           window.location.replace(matchedQr.destination);
         }
-      } catch (err) {
+      } catch {
         try {
           window.location.href = matchedQr.destination;
         } catch (e2) {
           console.warn('Direct redirect blocked by sandbox iframe', e2);
         }
       }
+    };
+
+    if (delayMs === 0) {
+      performRedirect();
+      return;
     }
-  }, [matchedQr, logged, onLogScan]);
+
+    const timer = window.setTimeout(performRedirect, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [matchedQr, logged, delayMs, onLogScan]);
 
   if (!matchedQr) {
     return (

@@ -18,6 +18,7 @@ import {
   getVercelRouteCode,
   getSqlSchema,
 } from '../utils/qrLogic';
+import { ModalPortal } from './ModalPortal';
 
 interface DeploymentModalProps {
   isOpen: boolean;
@@ -36,8 +37,6 @@ export const DeploymentModal: React.FC<DeploymentModalProps> = ({
     'cloudflare' | 'vercel' | 'express' | 'sql' | 'standalone'
   >('cloudflare');
   const [copied, setCopied] = useState(false);
-
-  if (!isOpen) return null;
 
   const cfCode = getCloudflareWorkerCode(settings.customDomain || 'go.link');
   const vercelCode = getVercelRouteCode();
@@ -259,8 +258,13 @@ app.listen(PORT, () => console.log(\`DynoQR Gateway running on port \${PORT}\`))
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-4xl w-full shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh] border border-slate-200 bg-white">
+    <ModalPortal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidthClass="max-w-4xl"
+      ariaLabel="Hosting & Gateway Deployment"
+    >
+      <div className="flex flex-col max-h-[88vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
@@ -429,6 +433,6 @@ app.listen(PORT, () => console.log(\`DynoQR Gateway running on port \${PORT}\`))
         </div>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 };

@@ -33,9 +33,13 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
   onSimulateScan,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const basePath = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL
+    ? import.meta.env.BASE_URL
+    : '/'
+  ).replace(/\/+$/, '');
 
   const handleCopy = (slug: string, id: string) => {
-    const link = buildShortLink(slug, settings, window.location.origin);
+    const link = buildShortLink(slug, settings, `${window.location.origin}${basePath}`);
     navigator.clipboard.writeText(link);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -58,8 +62,9 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {qrs.map((qr) => {
-              const shortLink = buildShortLink(qr.slug, settings, window.location.origin);
+              const shortLink = buildShortLink(qr.slug, settings, `${window.location.origin}${basePath}`);
               const isCopied = copiedId === qr.id;
+              const localRedirectHref = `${basePath}/r/${qr.slug}`;
 
               return (
                 <tr key={qr.id} className="hover:bg-slate-50/80 transition-colors">
@@ -96,7 +101,7 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
                         {isCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
-                        href={`/r/${qr.slug}`}
+                        href={localRedirectHref}
                         target="_blank"
                         rel="noreferrer"
                         className="p-1 hover:bg-slate-200 text-slate-500 hover:text-blue-600 rounded"

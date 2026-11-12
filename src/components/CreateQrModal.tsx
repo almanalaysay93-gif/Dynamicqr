@@ -28,6 +28,7 @@ import {
   extractPlaceIdFromGoogleUrl,
 } from '../utils/qrLogic';
 import { generateQrDataUrl } from '../utils/qrRenderer';
+import { ModalPortal } from './ModalPortal';
 
 interface CreateQrModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ interface CreateQrModalProps {
   existingQrs: DynamicQR[];
   folders: string[];
   settings: PlatformSettings;
+  defaultFolder?: string;
 }
 
 export const CreateQrModal: React.FC<CreateQrModalProps> = ({
@@ -45,6 +47,7 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
   existingQrs,
   folders,
   settings,
+  defaultFolder,
 }) => {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -74,6 +77,18 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
   const [previewDataUrl, setPreviewDataUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Sync default folder when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setError(null);
+      const preferred =
+        defaultFolder && defaultFolder !== 'all'
+          ? defaultFolder
+          : folders[0] || settings.defaultFolder || 'Default';
+      setFolder(preferred);
+    }
+  }, [isOpen, defaultFolder, folders, settings.defaultFolder]);
+
   // Auto-generate slug when name changes unless user modified it
   useEffect(() => {
     if (!slugManuallyEdited && name.trim()) {
@@ -82,6 +97,8 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
         existingQrs.map((q) => q.slug)
       );
       setSlug(generated);
+    } else if (!slugManuallyEdited && !name.trim()) {
+      setSlug('');
     }
   }, [name, slugManuallyEdited, existingQrs]);
 
@@ -94,6 +111,7 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
   );
 
   useEffect(() => {
+    if (!isOpen) return;
     let active = true;
     generateQrDataUrl(candidateShortLink, {
       width: 240,
@@ -111,9 +129,24 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
     return () => {
       active = false;
     };
-  }, [candidateShortLink, fgColor, bgColor, correctionLevel, logoType, customLogoUrl]);
+  }, [isOpen, candidateShortLink, fgColor, bgColor, correctionLevel, logoType, customLogoUrl]);
 
-  if (!isOpen) return null;
+  const resetForm = () => {
+    setName('');
+    setSlug('');
+    setSlugManuallyEdited(false);
+    setIsCustomFolder(false);
+    setCustomFolderInput('');
+    setDestination('');
+    setNotes('');
+    setLogoType('google');
+    setCustomLogoUrl('');
+    setShowGoogleReviewHelper(false);
+    setGbpBusinessName('');
+    setGbpAddress('');
+    setGbpPlaceId('');
+    setError(null);
+  };
 
   const handleSlugChange = (val: string) => {
     setSlugManuallyEdited(true);
@@ -247,12 +280,18 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
     };
 
     onCreated(newQr);
+    resetForm();
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="clay-card max-w-3xl w-full shadow-2xl overflow-hidden my-6 border border-slate-200">
+    <ModalPortal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidthClass="max-w-3xl"
+      ariaLabel="Create Dynamic QR Code"
+    >
+      <div>
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
@@ -667,6 +706,6 @@ export const CreateQrModal: React.FC<CreateQrModalProps> = ({
         </form>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 };

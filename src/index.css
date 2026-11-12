@@ -22,16 +22,27 @@ html {
     -4px -4px 16px 0px rgba(255, 255, 255, 0.95),
     inset 1px 1px 2px rgba(255, 255, 255, 0.9),
     inset -1px -1px 3px rgba(15, 23, 42, 0.02);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .clay-card:hover {
   transform: translateY(-2px);
+  border-color: #cbd5e1;
   box-shadow: 
     12px 20px 34px -4px rgba(37, 99, 235, 0.09),
     -6px -6px 20px 0px rgba(255, 255, 255, 1),
     inset 1px 1px 2px rgba(255, 255, 255, 1),
     inset -1px -1px 3px rgba(37, 99, 235, 0.03);
+}
+
+.clay-modal {
+  background: #ffffff;
+  border-radius: 1.5rem;
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 24px 48px -12px rgba(15, 23, 42, 0.22),
+    0 8px 20px -6px rgba(37, 99, 235, 0.1),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.95);
 }
 
 .clay-card-flat {

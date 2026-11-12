@@ -210,3 +210,35 @@ test('extractPlaceIdFromGoogleUrl extracts ChIJ place IDs accurately', () => {
   );
 });
 
+test('generateQrSvgString preserves preset SVG viewBox, stroke attributes, and centers badge inside QR viewBox', async () => {
+  const { generateQrSvgString, escapeHtml } = await import('./qrRenderer');
+
+  const googleSvg = await generateQrSvgString('https://example.com/r/reviews-kansas', {
+    width: 400,
+    centerLogo: { type: 'google' },
+  });
+  // Must preserve 48x48 viewBox for Google logo and not scale by /24
+  assert.match(googleSvg, /viewBox="0 0 48 48"/);
+  assert.doesNotMatch(googleSvg, /scale\(2\.346/);
+
+  // Extract QR viewBox width and rect x coordinate to prove badge sits inside viewBox
+  const vbMatch = googleSvg.match(/viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/);
+  const rectMatch = googleSvg.match(/<rect x="(\d+(?:\.\d+)?)" y="(\d+(?:\.\d+)?)" width="(\d+(?:\.\d+)?)"/);
+  assert.ok(vbMatch && rectMatch);
+  const vbSize = Number(vbMatch[1]);
+  const rectX = Number(rectMatch[1]);
+  const rectW = Number(rectMatch[3]);
+  assert.ok(rectX > 0 && rectX + rectW < vbSize, `Expected badge (${rectX} + ${rectW}) inside viewBox (${vbSize})`);
+
+  const instaSvg = await generateQrSvgString('https://example.com/r/luccianos', {
+    width: 400,
+    centerLogo: { type: 'instagram' },
+  });
+  // Must preserve stroke="#2563EB" and fill="none" on stroke-based icons
+  assert.match(instaSvg, /stroke="#2563EB"/);
+  assert.match(instaSvg, /fill="none"/);
+
+  assert.equal(escapeHtml('<script>"test"&\'x\'</script>'), '&lt;script&gt;&quot;test&quot;&amp;&#39;x&#39;&lt;/script&gt;');
+});
+
+
