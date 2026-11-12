@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Check, Globe, Database, Save, RotateCcw, Upload, Download, AlertCircle } from 'lucide-react';
+import { X, Check, Globe, Database, Save, RotateCcw, Upload, Download, AlertCircle, Terminal } from 'lucide-react';
 import { PlatformSettings, DynamicQR, ScanRecord } from '../utils/qrLogic';
 import { ModalPortal } from './ModalPortal';
 
@@ -12,6 +12,7 @@ interface SettingsModalProps {
   scans: ScanRecord[];
   onImportData: (qrs: DynamicQR[], scans: ScanRecord[]) => void;
   onResetToDemo: () => void;
+  onOpenDeployment?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,6 +24,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   scans,
   onImportData,
   onResetToDemo,
+  onOpenDeployment,
 }) => {
   const [customDomain, setCustomDomain] = useState(settings.customDomain);
   const [useCustomDomain, setUseCustomDomain] = useState(settings.useCustomDomain);
@@ -246,6 +248,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Developer Gateway Deployment (Hidden inside Settings) */}
+          {onOpenDeployment && (
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Hosting & Gateway Deployment</span>
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Cloudflare Worker, Vercel Edge, SQL schema & single-file HTML export
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenDeployment}
+                className="clay-button-secondary px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0 cursor-pointer"
+              >
+                Open Guide
+              </button>
+            </div>
+          )}
 
           {/* Action Footer */}
           <div className="pt-4 border-t border-slate-100 flex items-center justify-between">

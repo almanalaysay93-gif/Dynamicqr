@@ -1,5 +1,5 @@
 import React from 'react';
-import { QrCode, Plus, Settings, Terminal, Download } from 'lucide-react';
+import { QrCode, Plus, Settings, Download } from 'lucide-react';
 
 interface TopNavProps {
   onOpenCreate: () => void;
@@ -14,7 +14,6 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenCreate,
   onOpenSettings,
   onOpenGoogleBusiness,
-  onOpenDeployment,
   onExportCsv,
 }) => {
   return (
@@ -47,18 +46,6 @@ export const TopNav: React.FC<TopNavProps> = ({
               >
                 <span className="w-4 h-4 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 text-[10px] font-black border border-blue-200 shrink-0">G</span>
                 <span className="hidden md:inline">Google Review QR</span>
-              </button>
-            )}
-
-            {onOpenDeployment && (
-              <button
-                onClick={onOpenDeployment}
-                className="clay-button-secondary px-3 py-2.5 text-xs font-semibold text-slate-600 hover:text-blue-600 flex items-center gap-1.5 cursor-pointer"
-                title="Gateway Deployment & Standalone Export"
-                aria-label="Gateway Deployment"
-              >
-                <Terminal className="w-4 h-4 text-blue-600" />
-                <span className="hidden lg:inline">Deploy</span>
               </button>
             )}
 

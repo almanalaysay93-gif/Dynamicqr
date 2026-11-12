@@ -754,6 +754,10 @@ export default function App() {
           showToast(`Imported ${newQrs.length} Dynamic QRs!`);
         }}
         onResetToDemo={handleResetToDemo}
+        onOpenDeployment={() => {
+          setIsSettingsOpen(false);
+          setIsDeploymentOpen(true);
+        }}
       />
     </div>
   );
