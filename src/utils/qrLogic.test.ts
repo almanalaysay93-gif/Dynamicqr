@@ -10,6 +10,8 @@ import {
   exportQrsToCsv,
   buildGoogleReviewUrl,
   extractPlaceIdFromGoogleUrl,
+  formatShortLinkDisplay,
+  normalizeSlugInput,
   PlatformSettings,
   DynamicQR,
 } from './qrLogic';
@@ -239,6 +241,25 @@ test('generateQrSvgString preserves preset SVG viewBox, stroke attributes, and c
   assert.match(instaSvg, /fill="none"/);
 
   assert.equal(escapeHtml('<script>"test"&\'x\'</script>'), '&lt;script&gt;&quot;test&quot;&amp;&#39;x&#39;&lt;/script&gt;');
+});
+
+test('formatShortLinkDisplay and normalizeSlugInput update short links cleanly', () => {
+  const settings: PlatformSettings = {
+    customDomain: 'https://go.mybrand.com/',
+    useCustomDomain: true,
+    defaultFolder: 'Default',
+    autoLogSimulations: true,
+    redirectDelayMs: 600,
+  };
+  assert.equal(formatShortLinkDisplay('vip-menu', settings), 'go.mybrand.com/r/vip-menu');
+  assert.equal(
+    formatShortLinkDisplay('vip-menu', { ...settings, useCustomDomain: false }),
+    '/r/vip-menu'
+  );
+
+  assert.equal(normalizeSlugInput('/r/New-Menu-2026'), 'new-menu-2026');
+  assert.equal(normalizeSlugInput('https://go.link/r/Summer_Promo'), 'summer-promo');
+  assert.equal(normalizeSlugInput('my custom link'), 'my-custom-link');
 });
 
 

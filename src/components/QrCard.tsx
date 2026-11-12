@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { DynamicQR, PlatformSettings, buildShortLink } from '../utils/qrLogic';
+import { DynamicQR, PlatformSettings, buildShortLink, formatShortLinkDisplay } from '../utils/qrLogic';
 import { generateQrDataUrl, downloadQrPng, downloadQrSvg, printQrStandSheet } from '../utils/qrRenderer';
 import { ModalPortal } from './ModalPortal';
 
@@ -166,9 +166,14 @@ export const QrCard: React.FC<QrCardProps> = ({
 
             {/* Short Link Pill */}
             <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 shadow-xs select-all truncate max-w-[170px]">
-                /r/{qr.slug}
-              </span>
+              <button
+                type="button"
+                onClick={() => onEditDestination(qr)}
+                className="text-xs font-mono font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full border border-blue-200 shadow-xs truncate max-w-[170px] cursor-pointer transition-colors"
+                title="Click to edit short link or destination"
+              >
+                {formatShortLinkDisplay(qr.slug, settings)}
+              </button>
               <button
                 onClick={handleCopy}
                 className="clay-button-secondary p-1.5 text-slate-600 hover:text-blue-600 cursor-pointer"

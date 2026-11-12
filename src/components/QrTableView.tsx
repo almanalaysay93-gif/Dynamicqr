@@ -10,7 +10,7 @@ import {
   Trash2,
   Play,
 } from 'lucide-react';
-import { DynamicQR, PlatformSettings, buildShortLink } from '../utils/qrLogic';
+import { DynamicQR, PlatformSettings, buildShortLink, formatShortLinkDisplay } from '../utils/qrLogic';
 import { downloadQrPng, printQrStandSheet } from '../utils/qrRenderer';
 
 interface QrTableViewProps {
@@ -92,7 +92,14 @@ export const QrTableView: React.FC<QrTableViewProps> = ({
                   {/* Short Link */}
                   <td className="py-3.5 px-4 font-mono font-bold text-blue-600 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
-                      <span>/r/{qr.slug}</span>
+                      <button
+                        type="button"
+                        onClick={() => onEditDestination(qr)}
+                        className="hover:underline cursor-pointer text-left"
+                        title="Click to edit short link or destination"
+                      >
+                        {formatShortLinkDisplay(qr.slug, settings)}
+                      </button>
                       <button
                         onClick={() => handleCopy(qr.slug, qr.id)}
                         className="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-800 rounded cursor-pointer"

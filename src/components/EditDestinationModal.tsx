@@ -13,20 +13,40 @@ import {
   Image as ImageIcon,
   Upload,
 } from 'lucide-react';
-import { DynamicQR, CenterLogoPreset, CenterLogoConfig, normalizeDestinationUrl } from '../utils/qrLogic';
+import {
+  DynamicQR,
+  PlatformSettings,
+  CenterLogoPreset,
+  CenterLogoConfig,
+  normalizeDestinationUrl,
+  generateSlug,
+  validateSlug,
+  formatShortLinkDisplay,
+  normalizeSlugInput,
+} from '../utils/qrLogic';
 import { ModalPortal } from './ModalPortal';
 
 interface EditDestinationModalProps {
   qr: DynamicQR | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (qrId: string, newDestination: string, newName?: string, newLogo?: CenterLogoConfig) => void;
+  existingQrs?: DynamicQR[];
+  settings?: PlatformSettings;
+  onSave: (
+    qrId: string,
+    newDestination: string,
+    newName?: string,
+    newLogo?: CenterLogoConfig,
+    newSlug?: string
+  ) => void;
 }
 
 export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
   qr,
   isOpen,
   onClose,
+  existingQrs = [],
+  settings,
   onSave,
 }) => {
   const lastQrRef = useRef<DynamicQR | null>(qr);
@@ -37,24 +57,63 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
 
   const [destination, setDestination] = useState(activeQr?.destination || '');
   const [name, setName] = useState(activeQr?.name || '');
+  const [slug, setSlug] = useState(activeQr?.slug || '');
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [logoType, setLogoType] = useState<CenterLogoPreset>(activeQr?.styling?.centerLogo?.type || 'none');
   const [customLogoUrl, setCustomLogoUrl] = useState<string>(activeQr?.styling?.centerLogo?.customUrl || '');
   const [error, setError] = useState<string | null>(null);
+
+  const otherSlugs = existingQrs
+    .filter((q) => q.id !== activeQr?.id)
+    .map((q) => q.slug);
 
   useEffect(() => {
     if (qr) {
       setDestination(qr.destination);
       setName(qr.name);
+      setSlug(qr.slug);
+      setSlugManuallyEdited(false);
       setLogoType(qr.styling?.centerLogo?.type || 'none');
       setCustomLogoUrl(qr.styling?.centerLogo?.customUrl || '');
       setError(null);
     }
   }, [qr]);
 
+  const handleNameChange = (newName: string) => {
+    setName(newName);
+    if (!slugManuallyEdited && activeQr) {
+      if (newName.trim() && newName.trim() !== activeQr.name) {
+        setSlug(generateSlug(newName, otherSlugs));
+      } else if (newName.trim() === activeQr.name) {
+        setSlug(activeQr.slug);
+      }
+    }
+  };
+
+  const handleSlugInputChange = (rawVal: string) => {
+    setSlugManuallyEdited(true);
+    setSlug(normalizeSlugInput(rawVal));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeQr) return;
     setError(null);
+
+    const finalSlug = slug.trim().replace(/-+$/g, '') || generateSlug(name || activeQr.name, otherSlugs);
+    const slugCheck = validateSlug(finalSlug);
+    if (!slugCheck.valid) {
+      setError(slugCheck.error || 'Please enter a valid short link slug');
+      return;
+    }
+
+    const collision = existingQrs.find(
+      (q) => q.id !== activeQr.id && q.slug.toLowerCase() === finalSlug.toLowerCase()
+    );
+    if (collision) {
+      setError(`Short link "/r/${finalSlug}" is already in use by "${collision.name}".`);
+      return;
+    }
 
     const check = normalizeDestinationUrl(destination);
     if (!check.valid) {
@@ -67,7 +126,7 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
       customUrl: logoType === 'custom' ? customLogoUrl : undefined,
     };
 
-    onSave(activeQr.id, check.url, name.trim() || activeQr.name, updatedLogo);
+    onSave(activeQr.id, check.url, name.trim() || activeQr.name, updatedLogo, finalSlug);
     onClose();
   };
 
@@ -75,6 +134,8 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
     setDestination(newUrl);
     setName(sampleLabel);
     setLogoType(sampleLogo);
+    setSlugManuallyEdited(false);
+    setSlug(generateSlug(sampleLabel, otherSlugs));
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,9 +164,9 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Edit Dynamic Target</h2>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">Edit Short Link & Destination</h2>
             <p className="text-xs text-blue-600 font-mono font-semibold mt-0.5">
-              Short Link: /r/{activeQr.slug}
+              Short Link: {formatShortLinkDisplay(slug || activeQr.slug, settings)}
             </p>
           </div>
           <button
@@ -181,9 +242,46 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               className="w-full clay-inset px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500"
             />
+          </div>
+
+          {/* Short Link Slug */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                Short Link (/r/slug) <span className="text-rose-500">*</span>
+              </label>
+              {name.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSlugManuallyEdited(true);
+                    setSlug(generateSlug(name, otherSlugs));
+                  }}
+                  className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold cursor-pointer"
+                >
+                  Auto-sync from Name
+                </button>
+              )}
+            </div>
+            <div className="flex items-center clay-inset overflow-hidden">
+              <span className="bg-slate-200/70 text-slate-600 px-3.5 py-2.5 text-xs font-mono font-semibold select-none border-r border-slate-300">
+                {settings?.useCustomDomain && settings.customDomain.trim()
+                  ? `${settings.customDomain.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '')}/r/`
+                  : '/r/'}
+              </span>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => handleSlugInputChange(e.target.value)}
+                placeholder="custom-short-link"
+                aria-label="Short Link Slug"
+                className="flex-1 bg-transparent px-3 py-2 text-xs font-mono text-blue-600 font-bold placeholder-slate-400 focus:outline-none"
+                required
+              />
+            </div>
           </div>
 
           {/* New Destination */}
@@ -257,7 +355,15 @@ export const EditDestinationModal: React.FC<EditDestinationModalProps> = ({
           </div>
 
           {/* Current vs New comparison */}
-          <div className="clay-inset p-3 text-xs space-y-1">
+          <div className="clay-inset p-3 text-xs space-y-1.5">
+            {slug && slug !== activeQr.slug && (
+              <div className="flex items-center gap-1.5 truncate font-mono pb-1 border-b border-slate-200/80">
+                <span className="font-sans font-semibold text-slate-400">Short Link:</span>
+                <span className="line-through text-slate-400">/r/{activeQr.slug}</span>
+                <ArrowRight className="w-3 h-3 shrink-0 text-blue-600" />
+                <span className="text-blue-600 font-bold">/r/{slug}</span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 truncate text-slate-500">
               <span className="font-semibold text-slate-400">Previous:</span>
               <span className="truncate line-through text-slate-500">{activeQr.destination}</span>

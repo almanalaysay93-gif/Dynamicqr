@@ -33,6 +33,7 @@ export interface DynamicQR {
   id: string;
   name: string;
   slug: string;
+  previousSlugs?: string[]; // Retains prior slugs when short link is changed so old links still redirect
   folder: string; // e.g. "Restaurant A", "Shop 1", "Client: Lucciano's"
   destination: string; // Final destination URL
   isActive: boolean;
@@ -219,6 +220,34 @@ export function buildShortLink(
   }
   const originClean = currentOrigin.replace(/\/+$/, '');
   return `${originClean}/r/${slug}`;
+}
+
+/**
+ * Formats the short link label for pills and tables, reflecting custom domain when enabled
+ */
+export function formatShortLinkDisplay(slug: string, settings?: PlatformSettings): string {
+  if (settings?.useCustomDomain && settings.customDomain.trim()) {
+    const domain = settings.customDomain.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    return `${domain}/r/${slug}`;
+  }
+  return `/r/${slug}`;
+}
+
+/**
+ * Extracts and normalizes a clean slug from raw user input (handles "/r/my-slug", full URLs, or plain text)
+ */
+export function normalizeSlugInput(raw: string): string {
+  let val = raw.trim().toLowerCase();
+  const rMatch = val.match(/\/r\/([a-z0-9_-]*)/i);
+  if (rMatch && rMatch[1] !== undefined) {
+    val = rMatch[1];
+  } else {
+    val = val.replace(/^https?:\/\/[^/]+\/?/i, '').replace(/^\/+|\/+$/g, '');
+  }
+  return val
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '');
 }
 
 /**

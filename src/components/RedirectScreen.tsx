@@ -20,7 +20,11 @@ export const RedirectScreen: React.FC<RedirectScreenProps> = ({
   const [logged, setLogged] = useState(false);
 
   const cleanSlug = slug.toLowerCase().trim();
-  const matchedQr = qrs.find((q) => q.slug.toLowerCase() === cleanSlug);
+  const matchedQr = qrs.find(
+    (q) =>
+      q.slug.toLowerCase() === cleanSlug ||
+      (q.previousSlugs && q.previousSlugs.some((ps) => ps.toLowerCase() === cleanSlug))
+  );
   const delayMs = Math.max(0, settings?.redirectDelayMs ?? 0);
 
   useEffect(() => {

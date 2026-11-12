@@ -224,13 +224,27 @@ export default function App() {
     qrId: string,
     newDestination: string,
     newName?: string,
-    newLogo?: CenterLogoConfig
+    newLogo?: CenterLogoConfig,
+    newSlug?: string
   ) => {
+    const existingQr = qrs.find((q) => q.id === qrId);
+    const oldSlug = existingQr?.slug;
+    const cleanedSlug = newSlug?.trim().toLowerCase() || oldSlug;
+    const slugChanged = Boolean(cleanedSlug && oldSlug && cleanedSlug !== oldSlug);
+
     setQrs((prev) =>
       prev.map((q) => {
         if (q.id === qrId) {
+          const nextSlug = cleanedSlug || q.slug;
+          const prevSlugs = new Set<string>(q.previousSlugs || []);
+          if (q.slug && q.slug !== nextSlug) {
+            prevSlugs.add(q.slug);
+          }
+          prevSlugs.delete(nextSlug);
           return {
             ...q,
+            slug: nextSlug,
+            previousSlugs: Array.from(prevSlugs),
             destination: newDestination,
             name: newName || q.name,
             updatedAt: new Date().toISOString(),
@@ -247,7 +261,19 @@ export default function App() {
         return q;
       })
     );
-    showToast('Destination updated! Physical QR code remains 100% identical.');
+
+    if (slugChanged && cleanedSlug && oldSlug) {
+      setScans((prev) =>
+        prev.map((s) =>
+          s.qrId === qrId || s.slug.toLowerCase() === oldSlug.toLowerCase()
+            ? { ...s, slug: cleanedSlug }
+            : s
+        )
+      );
+      showToast(`Short link updated to "/r/${cleanedSlug}" and destination saved!`);
+    } else {
+      showToast('Destination updated! Physical QR code remains 100% identical.');
+    }
   };
 
   const handleDuplicateQr = (qr: DynamicQR) => {
@@ -632,6 +658,8 @@ export default function App() {
         qr={editingQr}
         isOpen={Boolean(editingQr)}
         onClose={() => setEditingQr(null)}
+        existingQrs={qrs}
+        settings={settings}
         onSave={handleSaveDestination}
       />
 
